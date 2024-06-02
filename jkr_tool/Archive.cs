@@ -99,7 +99,7 @@ public class JKRDirectory : IRead {
 
     public bool IsDir => Attr.HasFlag(JKRFileAttr.FOLDER);
     public bool IsFile => Attr.HasFlag(JKRFileAttr.FILE);
-    public bool IsShortCut {
+    public bool IsShortcut {
         get {
             if (Name == ".." || Name == ".")
                 return IsDir;
@@ -138,6 +138,17 @@ public class JKRDirectory : IRead {
         names.Reverse();
         return Path.Join([.. names]);
     }
+
+    public static JKRDirectory CreateDir(string name, JKRFileAttr attr, JKRFolderNode? node, JKRFolderNode? parent) {
+        var dir = new JKRDirectory() {
+            Name = name,
+            Attr = attr,
+            FolderNode = node,
+            ParentNode = parent
+        };
+        parent?.ChildDirs.Add(dir);
+        return dir;
+    } 
 }
 
 public class JKRArchive : IRead {
@@ -219,5 +230,117 @@ public class JKRArchive : IRead {
 
     public void Unpack(DirectoryInfo info) {
         Root.Unpack(info);
+    }
+
+    protected void SortNodesandDirs(JKRFolderNode node) {
+        List<JKRDirectory> folders = [];
+        List<JKRDirectory> shortcuts = [];
+        foreach (var dir in node.ChildDirs) {
+            if (dir.IsShortcut)
+                shortcuts.Add(dir);
+            else if (dir.IsDir)
+                folders.Add(dir);
+        }
+        foreach (var shortcut in shortcuts) {
+            var index = shortcut.FolderNode switch {
+                null => u32.MaxValue,
+                _ => (u32)FolderNodes.IndexOf(shortcut.FolderNode)
+            };
+            shortcut.mNode.Data = index;
+            node.ChildDirs.Remove(shortcut);
+            node.ChildDirs.Add(shortcut);
+        }
+        node.mNode.FirstFileOffs = (u32)Directories.Count;
+        Directories.AddRange(node.ChildDirs);
+        foreach (var dir in folders) {
+            var index = (u32)FolderNodes.IndexOf(dir.FolderNode!);
+            dir.mNode.Data = index;
+            SortNodesandDirs(dir.FolderNode!);
+        }
+    }
+
+    public void SortNodesandDirs() {
+        Directories.Clear();
+        SortNodesandDirs(Root);
+        Recalc_File_Indeces();
+    }
+
+    protected void Recalc_File_Indeces() {
+        if (Sync) {
+            NextIdx = (u16)Directories.Count;
+            foreach (var (i, dir) in Directories.Select((d, id) => (id, d)))
+                if (dir.IsFile)
+                    dir.mNode.NodeIdx = (u16)i;
+        } else {
+            u16 file_id = 0;
+            foreach (var dir in Directories)
+                if (dir.IsFile)
+                    dir.mNode.NodeIdx = file_id++;
+            NextIdx = file_id;
+        }
+    }
+
+    public void CreateRoot(string name) {
+        if (Root.IsRoot)
+            return;
+        Root = new JKRFolderNode() {
+            Name = name,
+            IsRoot = true
+        };
+        FolderNodes.Add(Root);
+        JKRDirectory.CreateDir(".", JKRFileAttr.FOLDER, Root, Root);
+        JKRDirectory.CreateDir("..", JKRFileAttr.FOLDER, null, Root);
+        SortNodesandDirs();
+    }
+
+    public static JKRArchive CreateArchive(string name, bool sync = true) {
+        JKRArchive arch = new() { Sync = sync };
+        arch.CreateRoot(name);
+        return arch;
+    }
+
+    public JKRFolderNode CreateFolder(string name, JKRFolderNode? parent) {
+        JKRFolderNode node = new() {
+            Name = name
+        };
+        FolderNodes.Add(node);
+        JKRDirectory.CreateDir(name, JKRFileAttr.FOLDER, node, parent);
+        JKRDirectory.CreateDir(".", JKRFileAttr.FOLDER, node, node);
+        JKRDirectory.CreateDir("..", JKRFileAttr.FOLDER, parent, node);
+        SortNodesandDirs();
+        return node;
+    }
+
+    public JKRDirectory CreateFile(string name, JKRFolderNode? parent, JKRFileAttr attr) {
+        var dir = JKRDirectory.CreateDir(name, attr, null, parent);
+        if (!Sync)
+            dir.mNode.NodeIdx = NextIdx++;
+        return dir;
+    }
+
+    public void ImportFromFolder(string filepath, JKRFileAttr attr) {
+        if (!Root.IsRoot) {
+            var lastidx = filepath.LastIndexOf('\\');
+            var name = filepath[(lastidx + 1)..];
+            CreateRoot(name);
+        }
+        ImportNode(filepath, attr, Root);
+        SortNodesandDirs();
+    }
+
+    protected void ImportNode(string filepath, JKRFileAttr attr, JKRFolderNode? parent) {
+        foreach (var entry in Directory.GetFileSystemEntries(filepath)) {
+            if (Directory.Exists(entry)) {
+                DirectoryInfo info = new(entry);
+                if (info.Name is "." || info.Name is "..") continue;
+                var node = CreateFolder(info.Name, parent);
+                ImportNode(info.FullName, attr, node);
+            } else if (File.Exists(entry)) {
+                FileInfo info = new(entry);
+                if (info.Name is "." || info.Name is "..") continue;
+                var node = CreateFile(info.Name, parent, attr);
+                node.Data = File.ReadAllBytes(info.FullName);
+            }
+        }
     }
 }

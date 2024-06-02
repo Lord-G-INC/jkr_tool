@@ -1,7 +1,7 @@
-﻿using jkr_tool;
+﻿string path = "C:\\Users\\Matt\\Documents\\LordG-INC\\jkr_tool\\jkr_tool\\bin\\Debug\\net8.0\\GoldenAmogus";
 
-string path = "C:\\Users\\Matt\\Documents\\LordG-INC\\jkr_tool\\GoldenAmogus.arc";
-var data = File.ReadAllBytes(path);
-data = Yaz0.Decompress(data);
-var arch = new JKRArchive(data);
-arch.Unpack(new(Directory.GetCurrentDirectory()));
+var arch = JKRArchive.CreateArchive("GoldenAmogus");
+
+arch.ImportFromFolder(path, JKRFileAttr.FILE | JKRFileAttr.LOAD_TO_MRAM);
+
+Console.WriteLine(arch);
