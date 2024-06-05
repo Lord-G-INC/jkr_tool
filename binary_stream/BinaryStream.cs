@@ -86,4 +86,12 @@ public class BinaryStream : MemoryStream {
     public void WriteItem<T>(T item) where T : IWrite {
         item.Write(this);
     }
+
+    public void WriteUnmanaged(params ValueType[] values) {
+        foreach (var value in values) {
+            if (!value.GetType().IsUnmanaged())
+                continue;
+            Globals.WriteValueType(this, value);
+        }
+    }
 }

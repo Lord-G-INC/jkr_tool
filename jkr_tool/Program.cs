@@ -1,7 +1,7 @@
-﻿string path = "C:\\Users\\Matt\\Documents\\LordG-INC\\jkr_tool\\jkr_tool\\bin\\Debug\\net8.0\\GoldenAmogus";
+﻿using BinaryStream stream = new();
 
-var arch = JKRArchive.CreateArchive("GoldenAmogus");
+stream.WriteUnmanaged(1, 2);
 
-arch.ImportFromFolder(path, JKRFileAttr.FILE | JKRFileAttr.LOAD_TO_MRAM);
+var data = stream.ToArray();
 
-Console.WriteLine(arch);
+Console.WriteLine(data.Length);
