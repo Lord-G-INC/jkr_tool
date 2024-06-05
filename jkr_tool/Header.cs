@@ -1,6 +1,6 @@
 namespace jkr_tool;
 
-public struct JKRArchiveHeader : IRead, IWrite {
+public record struct JKRArchiveHeader : IRead, IWrite {
     public u32 FileSize;
     public u32 HeaderSize;
     public u32 FileDataOffset;
@@ -30,7 +30,7 @@ public struct JKRArchiveHeader : IRead, IWrite {
     }
 }
 
-public struct JKRArchiveDataHeader : IRead, IWrite {
+public record struct JKRArchiveDataHeader : IRead, IWrite {
     public u32 DirNodeCount;
     public u32 DirNodeOffset;
     public u32 FileNodeCount;

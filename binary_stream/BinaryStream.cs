@@ -73,6 +73,10 @@ public class BinaryStream : MemoryStream {
         WriteByte(0);
     }
 
+    public void WriteNTStrings(Encoding? enc, params string[] values) {
+        foreach (var s in values) WriteNTString(s, enc);
+    }
+
     public T ReadItem<T>() where T : IRead, new() {
         T res = new();
         res.Read(this);

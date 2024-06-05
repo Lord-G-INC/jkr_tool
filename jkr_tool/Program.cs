@@ -1,7 +1,11 @@
-﻿using BinaryStream stream = new();
+﻿string path = "C:\\Users\\Matt\\Documents\\LordG-INC\\jkr_tool\\jkr_tool\\bin\\Debug\\net8.0\\WarpAreaErrorLayout";
 
-stream.WriteUnmanaged(1, 2);
+JKRArchive arch = JKRArchive.CreateArchive("WarpAreaErrorLayout");
 
-var data = stream.ToArray();
+arch.ImportFromFolder(path, JKRFileAttr.FILE | JKRFileAttr.LOAD_TO_MRAM);
 
-Console.WriteLine(data.Length);
+var data = arch.ToBytes(Endian.Big);
+
+JKRArchive other = new(data);
+
+Console.WriteLine(other);
