@@ -207,13 +207,13 @@ public class JKRArchive : IRead {
         stream.Endian = endian;
         Header.Read(stream);
         DataHeader.Read(stream);
+        var table = StringTable.FromArchive(stream, this);
         stream.Seek(DataHeader.DirNodeOffset + Header.HeaderSize, SeekOrigin.Begin);
         FolderNodes.Capacity = (int)DataHeader.DirNodeCount;
         Directories.Capacity = (int)DataHeader.FileNodeCount;
         for (int i = 0; i < DataHeader.DirNodeCount; i++) {
             var node = stream.ReadItem<JKRFolderNode>();
-            long pos = DataHeader.StringTableOffset + Header.HeaderSize + node.mNode.NameOffs;
-            node.Name = stream.ReadNTStringAt(pos);
+            node.Name = table[node.mNode.NameOffs];
             if (!Root.IsRoot) {
                 node.IsRoot = true;
                 Root = node;
@@ -224,14 +224,13 @@ public class JKRArchive : IRead {
         for (int i = 0; i < DataHeader.FileNodeCount; i++) {
             var dir = stream.ReadItem<JKRDirectory>();
             stream.Position += 4;
-            long pos = DataHeader.StringTableOffset + Header.HeaderSize + dir.NameOffs;
-            dir.Name = stream.ReadNTStringAt(pos);
+            dir.Name = table[dir.NameOffs];
             if (dir.IsDir && dir.mNode.Data != u32.MaxValue) {
                 dir.FolderNode = FolderNodes[(int)dir.mNode.Data];
                 if (dir.FolderNode.mNode.Hash == dir.mNode.Hash)
                     dir.FolderNode.Directory = dir;
             } else if (dir.IsFile) {
-                pos = Header.FileDataOffset + Header.HeaderSize + dir.mNode.Data;
+                var pos = Header.FileDataOffset + Header.HeaderSize + dir.mNode.Data;
                 Array.Resize(ref dir.Data, (int)dir.mNode.DataSize);
                 var seek = new Seek<BinaryStream>(stream, pos);
                 stream.Read(dir.Data);
@@ -373,28 +372,26 @@ public class JKRArchive : IRead {
     }
 
     protected byte[] CollectStrings() {
-        using BinaryStream stream = new();
-        stream.WriteNTStrings(Encoding.ASCII, ".", "..", Root.Name);
+        StringTable table = new();
+        table.Add(".", "..", Root.Name);
         Root.mNode.NameOffs = 5;
-        CollectStrings(stream, Root);
-        while (stream.Length % 32 != 0)
-            stream.WriteByte(0);
-        return stream.ToArray();
+        CollectStrings(table, Root);
+        return table.ToArray();
     }
 
-    protected static void CollectStrings(BinaryStream stream, JKRFolderNode node) {
+    protected static void CollectStrings(StringTable table, JKRFolderNode node) {
         for (int i = 0; i < node.ChildDirs.Count; i++) {
-            if (node.ChildDirs[i].Name is ".")
-                node.ChildDirs[i].NameOffs = 0;
-            else if (node.ChildDirs[i].Name is "..")
-                node.ChildDirs[i].NameOffs = 2;
+            var dir = node.ChildDirs[i];
+            if (dir.Name is ".")
+                dir.NameOffs = 0;
+            else if (dir.Name is "..")
+                dir.NameOffs = 2;
             else {
-                node.ChildDirs[i].NameOffs = (ushort)stream.Length;
-                stream.WriteNTString(node.ChildDirs[i].Name, Encoding.ASCII);
+                dir.NameOffs = (u16)table.Add(dir.Name);
             }
-            if (node.ChildDirs[i].IsDir && !node.ChildDirs[i].IsShortcut) {
-                node.ChildDirs[i].FolderNode!.mNode.NameOffs = node.ChildDirs[i].NameOffs;
-                CollectStrings(stream, node.ChildDirs[i].FolderNode!);
+            if (dir.IsDir && !dir.IsShortcut) {
+                dir.FolderNode!.mNode.NameOffs = dir.NameOffs;
+                CollectStrings(table, dir.FolderNode!);
             }
         }
     }
