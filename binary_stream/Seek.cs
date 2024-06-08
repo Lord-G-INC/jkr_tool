@@ -1,6 +1,6 @@
 namespace binary_stream;
 
-public class Seek<T>: IDisposable where T: Stream{
+public class Seek<T>: IDisposable where T: Stream {
     protected T Stream;
     protected long Position;
 

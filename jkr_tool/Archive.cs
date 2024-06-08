@@ -171,7 +171,7 @@ public class JKRDirectory : IRead, IWrite {
     } 
 }
 
-public class JKRArchive : IRead {
+public class JKRArchive : IRead, IWrite {
     public JKRArchiveHeader Header;
     public JKRArchiveDataHeader DataHeader = new() {Sync = true};
     public List<JKRFolderNode> FolderNodes = [];
