@@ -27,8 +27,8 @@ public class JKRFolderNode : IRead, IWrite {
     public Node mNode;
     public bool IsRoot = false;
     public string Name = string.Empty;
-    public JKRDirectory? Directory;
-    public List<JKRDirectory> ChildDirs = [];
+    public JKRFileNode? FileNode;
+    public List<JKRFileNode> ChildNodes = [];
 
     public void Read(BinaryStream stream) {
         stream.ReadItem(ref mNode);
@@ -47,10 +47,10 @@ public class JKRFolderNode : IRead, IWrite {
     {
         List<string> names = [];
         names.Add(Name);
-        var node = Directory?.ParentNode;
+        var node = FileNode?.ParentNode;
         while (node != null) {
             names.Add(node.Name);
-            node = node.Directory?.ParentNode;
+            node = node.FileNode?.ParentNode;
         }
         names.Reverse();
         return Path.Join([.. names]);
@@ -60,7 +60,7 @@ public class JKRFolderNode : IRead, IWrite {
         if (IsRoot)
            System.IO.Directory.CreateDirectory(Path.Join(dir.FullName, Name));
         dir.Create();
-        foreach (var child in ChildDirs) {
+        foreach (var child in ChildNodes) {
             if (child.Name is "." || child.Name is "..")
                 continue;
             var fullpath = dir.FullName.Contains(Name) switch {
@@ -79,12 +79,12 @@ public class JKRFolderNode : IRead, IWrite {
         stream.WriteString(GetShortName());
         stream.WriteUnmanaged(mNode.NameOffs);
         stream.WriteUnmanaged(CalcHash(Name));
-        stream.WriteUnmanaged((u16)ChildDirs.Count);
+        stream.WriteUnmanaged((u16)ChildNodes.Count);
         stream.WriteUnmanaged(mNode.FirstFileOffs);
     }
 }
 
-public class JKRDirectory : IRead, IWrite {
+public class JKRFileNode : IRead, IWrite {
     public record struct Node: IRead {
         public u16 NodeIdx;
         public u16 Hash;
@@ -153,20 +153,20 @@ public class JKRDirectory : IRead, IWrite {
         var node = ParentNode;
         while (node != null) {
             names.Add(node.Name);
-            node = node.Directory?.ParentNode;
+            node = node.FileNode?.ParentNode;
         }
         names.Reverse();
         return Path.Join([.. names]);
     }
 
-    public static JKRDirectory CreateDir(string name, JKRFileAttr attr, JKRFolderNode? node, JKRFolderNode? parent) {
-        var dir = new JKRDirectory() {
+    public static JKRFileNode CreateNode(string name, JKRFileAttr attr, JKRFolderNode? node, JKRFolderNode? parent) {
+        var dir = new JKRFileNode() {
             Name = name,
             Attr = attr,
             FolderNode = node,
             ParentNode = parent
         };
-        parent?.ChildDirs.Add(dir);
+        parent?.ChildNodes.Add(dir);
         return dir;
     } 
 }
@@ -175,7 +175,7 @@ public class JKRArchive : IRead, IWrite {
     public JKRArchiveHeader Header;
     public JKRArchiveDataHeader DataHeader = new() {Sync = true};
     public List<JKRFolderNode> FolderNodes = [];
-    public List<JKRDirectory> Directories = [];
+    public List<JKRFileNode> FileNodes = [];
     public JKRFolderNode Root = new();
     public bool Sync {get => DataHeader.Sync; set => DataHeader.Sync = value;}
     public u16 NextIdx {get => DataHeader.NextIdx; set => DataHeader.NextIdx = value;}
@@ -210,7 +210,7 @@ public class JKRArchive : IRead, IWrite {
         var table = StringTable.FromArchive(stream, this);
         stream.Seek(DataHeader.DirNodeOffset + Header.HeaderSize, SeekOrigin.Begin);
         FolderNodes.Capacity = (int)DataHeader.DirNodeCount;
-        Directories.Capacity = (int)DataHeader.FileNodeCount;
+        FileNodes.Capacity = (int)DataHeader.FileNodeCount;
         for (int i = 0; i < DataHeader.DirNodeCount; i++) {
             var node = stream.ReadItem<JKRFolderNode>();
             node.Name = table[node.mNode.NameOffs];
@@ -222,13 +222,13 @@ public class JKRArchive : IRead, IWrite {
         }
         stream.Seek(DataHeader.FileNodeOffset + Header.HeaderSize, SeekOrigin.Begin);
         for (int i = 0; i < DataHeader.FileNodeCount; i++) {
-            var dir = stream.ReadItem<JKRDirectory>();
+            var dir = stream.ReadItem<JKRFileNode>();
             stream.Position += 4;
             dir.Name = table[dir.NameOffs];
             if (dir.IsDir && dir.mNode.Data != u32.MaxValue) {
                 dir.FolderNode = FolderNodes[(int)dir.mNode.Data];
                 if (dir.FolderNode.mNode.Hash == dir.mNode.Hash)
-                    dir.FolderNode.Directory = dir;
+                    dir.FolderNode.FileNode = dir;
             } else if (dir.IsFile) {
                 var pos = Header.FileDataOffset + Header.HeaderSize + dir.mNode.Data;
                 Array.Resize(ref dir.Data, (int)dir.mNode.DataSize);
@@ -236,15 +236,15 @@ public class JKRArchive : IRead, IWrite {
                 stream.Read(dir.Data);
                 seek.Dispose();
             }
-            Directories.Add(dir);
+            FileNodes.Add(dir);
         }
         for (int i = 0; i < FolderNodes.Count; i++) {
             var node = FolderNodes[i];
             int off = (int)node.mNode.FirstFileOffs;
             int count = off + node.mNode.FileCount;
             for (int y = off; y < count; y++) {
-                Directories[y].ParentNode = FolderNodes[i];
-                FolderNodes[i].ChildDirs.Add(Directories[y]);
+                FileNodes[y].ParentNode = FolderNodes[i];
+                FolderNodes[i].ChildNodes.Add(FileNodes[y]);
             }
         }
     }
@@ -254,9 +254,9 @@ public class JKRArchive : IRead, IWrite {
     }
 
     protected void SortNodesandDirs(JKRFolderNode node) {
-        List<JKRDirectory> folders = [];
-        List<JKRDirectory> shortcuts = [];
-        foreach (var dir in node.ChildDirs) {
+        List<JKRFileNode> folders = [];
+        List<JKRFileNode> shortcuts = [];
+        foreach (var dir in node.ChildNodes) {
             if (dir.IsShortcut)
                 shortcuts.Add(dir);
             else if (dir.IsDir)
@@ -268,11 +268,11 @@ public class JKRArchive : IRead, IWrite {
                 _ => (u32)FolderNodes.IndexOf(shortcut.FolderNode)
             };
             shortcut.mNode.Data = index;
-            node.ChildDirs.Remove(shortcut);
-            node.ChildDirs.Add(shortcut);
+            node.ChildNodes.Remove(shortcut);
+            node.ChildNodes.Add(shortcut);
         }
-        node.mNode.FirstFileOffs = (u32)Directories.Count;
-        Directories.AddRange(node.ChildDirs);
+        node.mNode.FirstFileOffs = (u32)FileNodes.Count;
+        FileNodes.AddRange(node.ChildNodes);
         foreach (var dir in folders) {
             var index = (u32)FolderNodes.IndexOf(dir.FolderNode!);
             dir.mNode.Data = index;
@@ -281,20 +281,20 @@ public class JKRArchive : IRead, IWrite {
     }
 
     public void SortNodesandDirs() {
-        Directories.Clear();
+        FileNodes.Clear();
         SortNodesandDirs(Root);
         Recalc_File_Indeces();
     }
 
     protected void Recalc_File_Indeces() {
         if (Sync) {
-            NextIdx = (u16)Directories.Count;
-            foreach (var (i, dir) in Directories.Select((d, id) => (id, d)))
+            NextIdx = (u16)FileNodes.Count;
+            foreach (var (i, dir) in FileNodes.Select((d, id) => (id, d)))
                 if (dir.IsFile)
                     dir.mNode.NodeIdx = (u16)i;
         } else {
             u16 file_id = 0;
-            foreach (var dir in Directories)
+            foreach (var dir in FileNodes)
                 if (dir.IsFile)
                     dir.mNode.NodeIdx = file_id++;
             NextIdx = file_id;
@@ -312,8 +312,8 @@ public class JKRArchive : IRead, IWrite {
             }
         };
         FolderNodes.Add(Root);
-        JKRDirectory.CreateDir(".", JKRFileAttr.FOLDER, Root, Root);
-        JKRDirectory.CreateDir("..", JKRFileAttr.FOLDER, null, Root);
+        JKRFileNode.CreateNode(".", JKRFileAttr.FOLDER, Root, Root);
+        JKRFileNode.CreateNode("..", JKRFileAttr.FOLDER, null, Root);
         SortNodesandDirs();
     }
 
@@ -328,17 +328,17 @@ public class JKRArchive : IRead, IWrite {
             Name = name
         };
         node.mNode.ShortName = node.GetShortName();
-        var dir = JKRDirectory.CreateDir(name, JKRFileAttr.FOLDER, node, parent);
-        JKRDirectory.CreateDir(".", JKRFileAttr.FOLDER, node, node);
-        JKRDirectory.CreateDir("..", JKRFileAttr.FOLDER, parent, node);
-        node.Directory = dir;
+        var dir = JKRFileNode.CreateNode(name, JKRFileAttr.FOLDER, node, parent);
+        JKRFileNode.CreateNode(".", JKRFileAttr.FOLDER, node, node);
+        JKRFileNode.CreateNode("..", JKRFileAttr.FOLDER, parent, node);
+        node.FileNode = dir;
         FolderNodes.Add(node);
         SortNodesandDirs();
         return node;
     }
 
-    public JKRDirectory CreateFile(string name, JKRFolderNode? parent, JKRFileAttr attr) {
-        var dir = JKRDirectory.CreateDir(name, attr, null, parent);
+    public JKRFileNode CreateFile(string name, JKRFolderNode? parent, JKRFileAttr attr) {
+        var dir = JKRFileNode.CreateNode(name, attr, null, parent);
         if (!Sync)
             dir.mNode.NodeIdx = NextIdx++;
         return dir;
@@ -380,8 +380,8 @@ public class JKRArchive : IRead, IWrite {
     }
 
     protected static void CollectStrings(StringTable table, JKRFolderNode node) {
-        for (int i = 0; i < node.ChildDirs.Count; i++) {
-            var dir = node.ChildDirs[i];
+        for (int i = 0; i < node.ChildNodes.Count; i++) {
+            var dir = node.ChildNodes[i];
             if (dir.Name is ".")
                 dir.NameOffs = 0;
             else if (dir.Name is "..")
@@ -396,7 +396,7 @@ public class JKRArchive : IRead, IWrite {
         }
     }
 
-    protected static long WriteFileData(BinaryStream stream, List<JKRDirectory> files) {
+    protected static long WriteFileData(BinaryStream stream, List<JKRFileNode> files) {
         var start = stream.Position;
         for (int i = 0; i < files.Count; i++) {
             files[i].mNode.Data = (uint)(stream.Position - start);
@@ -409,8 +409,8 @@ public class JKRArchive : IRead, IWrite {
     }
 
     public void Write(BinaryStream stream) {
-        List<JKRDirectory> mram = [], aram = [], dvd = [];
-        foreach (var dir in Directories)
+        List<JKRFileNode> mram = [], aram = [], dvd = [];
+        foreach (var dir in FileNodes)
             if (dir.PreloadType is JKRPreloadType.MRAM)
                 mram.Add(dir);
             else if (dir.PreloadType is JKRPreloadType.ARAM)
@@ -418,7 +418,7 @@ public class JKRArchive : IRead, IWrite {
             else if (dir.PreloadType is JKRPreloadType.DVD)
                 dvd.Add(dir);
         var fnodecount = FolderNodes.Count;
-        var dnodecount = Directories.Count;
+        var dnodecount = FileNodes.Count;
         var dnodeoff = 0x40 + Align32(fnodecount * 0x10);
         var stroff = dnodeoff + Align32(dnodecount * 0x14);
         var strdata = CollectStrings();
@@ -436,7 +436,7 @@ public class JKRArchive : IRead, IWrite {
         var dvd_size = WriteFileData(stream, dvd);
         var total_size = (u32)(mram_size + aram_size + dvd_size);
         stream.Seek(dnodeoff, SeekOrigin.Begin);
-        foreach (var node in Directories) {
+        foreach (var node in FileNodes) {
             node.Write(stream);
             stream.WriteUnmanaged(0);
         }
