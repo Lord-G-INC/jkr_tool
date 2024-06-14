@@ -272,6 +272,7 @@ public class JKRArchive : IRead, IWrite {
             node.ChildNodes.Add(shortcut);
         }
         node.mNode.FirstFileOffs = (u32)FileNodes.Count;
+        node.mNode.FileCount = (u16)node.ChildNodes.Count;
         FileNodes.AddRange(node.ChildNodes);
         foreach (var dir in folders) {
             var index = (u32)FolderNodes.IndexOf(dir.FolderNode!);
