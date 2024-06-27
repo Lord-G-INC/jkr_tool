@@ -1,0 +1,3 @@
+[submodule "binary_stream"]
+	path = binary_stream
+	url = https://github.com/Lord-G-INC/binary_stream.git
