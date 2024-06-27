@@ -1,10 +1,9 @@
 global using binary_stream;
-global using jkr_tool;
-global using static jkr_tool.Globals;
+global using static jkr_lib.Globals;
 global using System.Text;
 using System.Numerics;
 
-namespace jkr_tool;
+namespace jkr_lib;
 
 public static class Globals {
     public static T Align32<T>(T num) where T : struct, INumber<T>, IBitwiseOperators<T, T, T> {

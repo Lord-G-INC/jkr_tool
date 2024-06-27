@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 
-namespace jkr_tool;
+namespace jkr_lib;
 
 public class StringTable {
     public Dictionary<u32, string> Table {get; init;} = [];

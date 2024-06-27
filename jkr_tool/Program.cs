@@ -1,4 +1,7 @@
-﻿int files = 0;
+﻿using jkr_lib;
+using binary_stream;
+
+int files = 0;
 Console.WriteLine("JKR Tool 1.0\nBy Lord-Giganticus\n-------------");
 foreach (var arg in args.Where(x => Directory.Exists(x) || File.Exists(x))) {
     if (Directory.Exists(arg)) {
