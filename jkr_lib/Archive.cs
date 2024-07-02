@@ -58,7 +58,7 @@ public class JKRFolderNode : IRead, IWrite {
 
     public void Unpack(DirectoryInfo dir) {
         if (IsRoot)
-           System.IO.Directory.CreateDirectory(Path.Join(dir.FullName, Name));
+           Directory.CreateDirectory(Path.Join(dir.FullName, Name));
         dir.Create();
         foreach (var child in ChildNodes) {
             if (child.Name is "." || child.Name is "..")
@@ -68,7 +68,7 @@ public class JKRFolderNode : IRead, IWrite {
                 false => Path.Join(dir.FullName, Name, child.Name)
             };
             if (child.IsDir) {
-                System.IO.Directory.CreateDirectory(fullpath);
+                Directory.CreateDirectory(fullpath);
                 child.FolderNode?.Unpack(new(fullpath));
             } else if (child.IsFile)
                 File.WriteAllBytes(fullpath, child.Data);
@@ -126,7 +126,7 @@ public class JKRFileNode : IRead, IWrite {
             else if (Attr.HasFlag(JKRFileAttr.LOAD_TO_ARAM))
                 return JKRPreloadType.ARAM;
             else if (Attr.HasFlag(JKRFileAttr.LOAD_FROM_DVD))
-            return JKRPreloadType.DVD;
+                return JKRPreloadType.DVD;
         }
         return JKRPreloadType.NONE;
     } }
@@ -191,6 +191,10 @@ public class JKRArchive : IRead, IWrite {
     public JKRArchive(Stream stream) {
         using BinaryStream reader = new(stream);
         Read(reader);
+    }
+
+    public JKRArchive(BinaryStream stream) {
+        Read(stream);
     }
 
     public override string ToString() => Root.ToString();
@@ -474,5 +478,13 @@ public class JKRArchive : IRead, IWrite {
         };
         Write(stream);
         return stream.ToArray();
+    }
+
+    public IEnumerable<JKRFolderNode> FindFolder(string name) {
+        return FolderNodes.Where(x => x.Name == name || x.ToString() == name);
+    }
+
+    public IEnumerable<JKRFileNode> FindFile(string name) {
+        return FileNodes.Where(x => x.Name == name || x.ToString() == name);
     }
 }
