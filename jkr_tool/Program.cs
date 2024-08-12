@@ -15,13 +15,7 @@ foreach (var arg in args.Where(x => Directory.Exists(x) || File.Exists(x))) {
         File.WriteAllBytes(finfo.FullName, data);
         files++;
     } else if (File.Exists(arg)) {
-        FileInfo info = new(arg);
-        // Console.WriteLine("{info.FullName} ==> {info.DirectoryName}")
-        var parent = info.Directory!;
-        var data = File.ReadAllBytes(info.FullName);
-        data = Yaz0.Decompress(data);
-        JKRArchive arch = new(data);
-        arch.Unpack(parent);
+        Util.DumpFile(arg);
         files++;
     }
 }

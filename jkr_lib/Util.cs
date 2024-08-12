@@ -9,4 +9,10 @@ public static class Util {
     public static Span<TTo> Cast<TFrom, TTo>(this Span<TFrom> span) where TFrom : struct where TTo : struct {
         return MemoryMarshal.Cast<TFrom, TTo>(span);
     }
+    public static void DumpFile(string file) {
+        var data = File.ReadAllBytes(file);
+        data = Yaz0.Decompress(data);
+        var arch = new JKRArchive(data);
+        arch.Unpack(new DirectoryInfo(file).Parent!);
+    }
 }
