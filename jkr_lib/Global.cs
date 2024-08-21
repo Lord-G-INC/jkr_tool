@@ -13,8 +13,7 @@ public static class Globals {
     public static u16 CalcHash(string str) {
         u16 ret = 0;
         foreach (var b in Encoding.ASCII.GetBytes(str)) {
-            ret *= 3;
-            ret += b;
+            ret = (u16)(b + (ret * 0x1fu));
         }
         return ret;
     }

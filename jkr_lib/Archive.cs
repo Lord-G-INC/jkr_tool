@@ -1,6 +1,13 @@
-namespace jkr_lib;
+using static binary_stream.Util;
 
+namespace jkr_lib;
+/// <summary>
+/// A Node within a JKRArchive that represents a Folder, containing other Nodes as children.
+/// </summary>
 public class JKRFolderNode : IRead, IWrite {
+    /// <summary>
+    /// The inner binary data of a <see cref="JKRFolderNode"/>.
+    /// </summary>
     public record struct Node : IRead, IWrite {
         public Node() {}
         public string ShortName = string.Empty;
@@ -33,7 +40,9 @@ public class JKRFolderNode : IRead, IWrite {
     public void Read(BinaryStream stream) {
         stream.ReadItem(ref mNode);
     }
-
+    /// <summary>
+    /// Gets the shortname of a Node, if this Node is the Root, it will return ROOT.
+    /// </summary>
     public string GetShortName() {
         if (IsRoot)
             return "ROOT";
@@ -55,7 +64,10 @@ public class JKRFolderNode : IRead, IWrite {
         names.Reverse();
         return Path.Join([.. names]);
     }
-
+    /// <summary>
+    /// Unpacks this Node and its children to a directory.
+    /// </summary>
+    /// <param name="dir">The directory to unpack into</param>
     public void Unpack(DirectoryInfo dir) {
         if (IsRoot)
            Directory.CreateDirectory(Path.Join(dir.FullName, Name));
@@ -83,8 +95,15 @@ public class JKRFolderNode : IRead, IWrite {
         stream.WriteUnmanaged(mNode.FirstFileOffs);
     }
 }
-
+/// <summary>
+/// A Node that represents a "File", despite possibly having a file, 
+/// some FileNodes can point to a <see cref="JKRFolderNode"/>.
+/// It's best to check the Node's <see cref="Attr"/> to be sure.
+/// </summary>
 public class JKRFileNode : IRead, IWrite {
+    /// <summary>
+    /// The inner binary data of a <see cref="JKRFileNode"/>
+    /// </summary>
     public record struct Node: IRead {
         public u16 NodeIdx;
         public u16 Hash;
@@ -107,9 +126,21 @@ public class JKRFileNode : IRead, IWrite {
     public string Name = string.Empty;
     public u16 NameOffs;
     public u8[] Data = [];
-
+    /// <summary>
+    /// Gets info from the <see cref="Attr"/> to see if this Node is a "Directory".
+    /// If this is true, this Node points to a <see cref="JKRFolderNode"/>.
+    /// </summary>
     public bool IsDir => Attr.HasFlag(JKRFileAttr.FOLDER);
+    /// <summary>
+    /// Gets info from the <see cref="Attr"/> to see if this Node is a File.
+    /// If this is true, <see cref="Data"/>'s length will not be 0.
+    /// </summary>
     public bool IsFile => Attr.HasFlag(JKRFileAttr.FILE);
+    /// <summary>
+    /// This is a special property to see if this Node is a "Shortcut".
+    /// A shortcut node is a "Directory" that will either point to the owning <see cref="JKRFolderNode"/>,
+    /// or the parent <see cref="JKRFolderNode"/>.
+    /// </summary>
     public bool IsShortcut {
         get {
             if (Name == ".." || Name == ".")
@@ -117,6 +148,9 @@ public class JKRFileNode : IRead, IWrite {
             return false;
         }
     }
+    /// <summary>
+    /// Determines how this Node is to be loaded on a Wii/GCN's real hardware.
+    /// </summary>
     public JKRPreloadType PreloadType { get
     {
         if (IsFile)
@@ -158,7 +192,16 @@ public class JKRFileNode : IRead, IWrite {
         names.Reverse();
         return Path.Join([.. names]);
     }
-
+    /// <summary>
+    /// Creates a brand new Node using the arguements as information.
+    /// If <paramref name="parent"/> is not null,
+    /// the new Node will be added to it's <see cref="JKRFolderNode.ChildNodes"/>.
+    /// </summary>
+    /// <param name="name">The Node's name</param>
+    /// <param name="attr">The Node's attributes</param>
+    /// <param name="node">The Node's owning folder, if any.</param>
+    /// <param name="parent">The Node's parent folder, if any.</param>
+    /// <returns></returns>
     public static JKRFileNode CreateNode(string name, JKRFileAttr attr, JKRFolderNode? node, JKRFolderNode? parent) {
         var dir = new JKRFileNode() {
             Name = name,
@@ -168,31 +211,60 @@ public class JKRFileNode : IRead, IWrite {
         };
         parent?.ChildNodes.Add(dir);
         return dir;
-    } 
+    }
+    /// <summary>
+    /// Loads this Node's <see cref="Data"/> into a <typeparamref name="T"/> that implements <see cref="IRead"/>.
+    /// <typeparamref name="T"/> must also have a default ctor.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="endian">The endian to use</param>
+    /// <param name="enc">The encoding for the <see cref="BinaryStream"/>, if needed.</param>
+    /// <returns></returns>
+    public T LoadInto<T>(Endian endian, Encoding? enc = null) where T : IRead, new()
+    {
+        return FromBytes<T>(Data, endian, enc);
+    }
 }
-
+/// <summary>
+/// A RARC/CRAR file, the main way the format should be dealt with using this library.
+/// </summary>
 public class JKRArchive : IRead, IWrite {
     public JKRArchiveHeader Header;
     public JKRArchiveDataHeader DataHeader = new() {Sync = true};
     public List<JKRFolderNode> FolderNodes = [];
     public List<JKRFileNode> FileNodes = [];
     public JKRFolderNode Root = new();
+    /// <summary>
+    /// Gets or Sets to sync up all nodes when Writing/Reading
+    /// </summary>
     public bool Sync {get => DataHeader.Sync; set => DataHeader.Sync = value;}
+    /// <summary>
+    /// The next avalable <see cref="JKRFileNode.Node.NodeIdx"/>, capped at 65535.
+    /// </summary>
     public u16 NextIdx {get => DataHeader.NextIdx; set => DataHeader.NextIdx = value;}
     public JKRArchive() {}
-
+    /// <summary>
+    /// Utility ctor to open a file and read it in, DOES NOT HANDLE YAZ0.
+    /// </summary>
+    /// <param name="info">The file to read.</param>
     public JKRArchive(FileInfo info) : this(File.ReadAllBytes(info.FullName)) {}
-
+    /// <summary>
+    /// Reads a read-only span of bytes for data. Yaz0 is NOT handled by this ctor, make sure to decompress it!
+    /// </summary>
     public JKRArchive(ReadOnlySpan<byte> span) {
         using BinaryStream stream = new(span);
         Read(stream);
     }
-
+    /// <summary>
+    /// Reads a stream for data. Yaz0 is NOT handled by this ctor, make sure to decompress it!
+    /// </summary>
     public JKRArchive(Stream stream) {
         using BinaryStream reader = new(stream);
         Read(reader);
     }
-
+    /// <summary>
+    /// Reads a BinaryStream for data. Yaz0 is NOT handled by this ctor, make sure to decompress it!
+    /// </summary>
     public JKRArchive(BinaryStream stream) {
         Read(stream);
     }
@@ -252,7 +324,9 @@ public class JKRArchive : IRead, IWrite {
             }
         }
     }
-
+    /// <summary>
+    /// Unpacks the Root Node into a directory. For more info see <seealso cref="JKRFolderNode.Unpack(DirectoryInfo)"/>
+    /// </summary>
     public void Unpack(DirectoryInfo info) {
         Root.Unpack(info);
     }
@@ -284,7 +358,9 @@ public class JKRArchive : IRead, IWrite {
             SortNodesandDirs(dir.FolderNode!);
         }
     }
-
+    /// <summary>
+    /// Sorts the nodes by how Nintendo sorts them
+    /// </summary>
     public void SortNodesandDirs() {
         FileNodes.Clear();
         SortNodesandDirs(Root);
@@ -305,7 +381,10 @@ public class JKRArchive : IRead, IWrite {
             NextIdx = file_id;
         }
     }
-
+    /// <summary>
+    /// Creates the Root node if it does not exist, only call this if you are making a new Archive!
+    /// </summary>
+    /// <param name="name"></param>
     public void CreateRoot(string name) {
         if (Root.IsRoot)
             return;
@@ -321,13 +400,18 @@ public class JKRArchive : IRead, IWrite {
         JKRFileNode.CreateNode("..", JKRFileAttr.FOLDER, null, Root);
         SortNodesandDirs();
     }
-
+    /// <summary>
+    /// Creates a new archive based off name and wanting to sync.
+    /// By default sync is turned ON.
+    /// </summary>
     public static JKRArchive CreateArchive(string name, bool sync = true) {
         JKRArchive arch = new() { Sync = sync };
         arch.CreateRoot(name);
         return arch;
     }
-
+    /// <summary>
+    /// Creates a new FolderNode based off the name and possible parent.
+    /// </summary>
     public JKRFolderNode CreateFolder(string name, JKRFolderNode? parent) {
         JKRFolderNode node = new() {
             Name = name
@@ -341,14 +425,18 @@ public class JKRArchive : IRead, IWrite {
         SortNodesandDirs();
         return node;
     }
-
+    /// <summary>
+    /// Creates a new FileNode bassed off the name, possible parent, and attributes.
+    /// </summary>
     public JKRFileNode CreateFile(string name, JKRFolderNode? parent, JKRFileAttr attr) {
         var dir = JKRFileNode.CreateNode(name, attr, null, parent);
         if (!Sync)
             dir.mNode.NodeIdx = NextIdx++;
         return dir;
     }
-
+    /// <summary>
+    /// Imports files and directories from a path on your machine.
+    /// </summary>
     public void ImportFromFolder(string filepath, JKRFileAttr attr) {
         if (!Root.IsRoot) {
             var lastidx = filepath.LastIndexOf('\\');
@@ -471,7 +559,9 @@ public class JKRArchive : IRead, IWrite {
         };
         dataheader.Write(stream);
     }
-
+    /// <summary>
+    /// Writes all the data of this Archive to bytes, depending on the Endian.
+    /// </summary>
     public byte[] ToBytes(Endian endian) {
         using BinaryStream stream = new() {
             Endian = endian
@@ -479,11 +569,17 @@ public class JKRArchive : IRead, IWrite {
         Write(stream);
         return stream.ToArray();
     }
-
+    /// <summary>
+    /// Attempts to find a FolderNode either based on it's full path or name.
+    /// </summary>
     public IEnumerable<JKRFolderNode> FindFolder(string name) {
         return FolderNodes.Where(x => x.Name == name || x.ToString() == name);
     }
-
+    /// <summary>
+    /// Attempts to find a FileNode either based on it's full path or name.
+    /// </summary>
+    /// <param name="name"></param>
+    /// <returns></returns>
     public IEnumerable<JKRFileNode> FindFile(string name) {
         return FileNodes.Where(x => x.Name == name || x.ToString() == name);
     }
