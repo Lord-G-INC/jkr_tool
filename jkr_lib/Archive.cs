@@ -562,13 +562,7 @@ public class JKRArchive : IRead, IWrite {
     /// <summary>
     /// Writes all the data of this Archive to bytes, depending on the Endian.
     /// </summary>
-    public byte[] ToBytes(Endian endian) {
-        using BinaryStream stream = new() {
-            Endian = endian
-        };
-        Write(stream);
-        return stream.ToArray();
-    }
+    public byte[] ToBytes(Endian endian, Encoding? enc = null) => this.IntoBytes(endian, enc);
     /// <summary>
     /// Attempts to find a FolderNode either based on it's full path or name.
     /// </summary>
