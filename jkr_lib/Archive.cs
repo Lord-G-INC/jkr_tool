@@ -1,4 +1,4 @@
-using static binary_stream.Util;
+using static Binary_Stream.Util;
 
 namespace jkr_lib;
 /// <summary>
@@ -562,7 +562,7 @@ public class JKRArchive : IRead, IWrite {
     /// <summary>
     /// Writes all the data of this Archive to bytes, depending on the Endian.
     /// </summary>
-    public byte[] ToBytes(Endian endian, Encoding? enc = null) => this.IntoBytes(endian, enc);
+    public byte[] ToBytes(Endian endian, Encoding? enc = null) => Binary_Stream.Util.ToBytes(this, endian, enc);
     /// <summary>
     /// Attempts to find a FolderNode either based on it's full path or name.
     /// </summary>

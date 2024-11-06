@@ -1,4 +1,4 @@
-global using binary_stream;
+global using Binary_Stream;
 global using static jkr_lib.Globals;
 global using System.Text;
 using System.Numerics;

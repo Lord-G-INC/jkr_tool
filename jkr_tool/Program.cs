@@ -1,5 +1,5 @@
 ﻿using jkr_lib;
-using binary_stream;
+using Binary_Stream;
 
 int files = 0;
 Console.WriteLine("JKR Tool 1.0\nBy Lord-Giganticus\n-------------");
@@ -15,7 +15,7 @@ foreach (var arg in args.Where(x => Directory.Exists(x) || File.Exists(x))) {
         File.WriteAllBytes(finfo.FullName, data);
         files++;
     } else if (File.Exists(arg)) {
-        Util.DumpFile(arg);
+        jkr_lib.Util.DumpFile(arg);
         files++;
     }
 }
