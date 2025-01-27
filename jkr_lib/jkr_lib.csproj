@@ -10,4 +10,8 @@
     <ProjectReference Include="..\binary_stream\BinaryStream.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
+  </ItemGroup>
+
 </Project>

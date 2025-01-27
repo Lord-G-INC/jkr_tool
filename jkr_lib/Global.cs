@@ -12,9 +12,15 @@ public static class Globals {
     }
     public static u16 CalcHash(string str) {
         u16 ret = 0;
-        foreach (var b in Encoding.ASCII.GetBytes(str)) {
-            ret = (u16)(b + (ret * 0x1fu));
+        foreach (var b in Shift_JIS.GetBytes(str)) {
+            ret = (u16)(b + (ret * 3u));
         }
         return ret;
+    }
+
+    public static Encoding Shift_JIS => Encoding.GetEncoding("Shift-JIS");
+
+    static Globals() {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 }
