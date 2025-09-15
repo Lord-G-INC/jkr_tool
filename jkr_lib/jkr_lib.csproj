@@ -7,11 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\binary_stream\BinaryStream.csproj" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
+    <ProjectReference Include="..\binary_stream\BinaryStream\BinaryStream.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-using static Binary_Stream.Util;
+
 
 namespace jkr_lib;
 /// <summary>
@@ -100,7 +100,7 @@ public class JKRFolderNode : IRead, IWrite {
 /// some FileNodes can point to a <see cref="JKRFolderNode"/>.
 /// It's best to check the Node's <see cref="Attr"/> to be sure.
 /// </summary>
-public class JKRFileNode : IRead, IWrite {
+public class JKRFileNode : IRead, IWrite, ILoadTo {
     /// <summary>
     /// The inner binary data of a <see cref="JKRFileNode"/>
     /// </summary>
@@ -213,22 +213,22 @@ public class JKRFileNode : IRead, IWrite {
         return dir;
     }
     /// <summary>
-    /// Loads this Node's <see cref="Data"/> into a <typeparamref name="T"/> that implements <see cref="IRead"/>.
-    /// <typeparamref name="T"/> must also have a default ctor.
+    /// Loads this Node's <see cref="Data"/> into a <typeparamref name="T"/> that implements <see cref="ILoadable{T}"/>.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    /// <param name="endian">The endian to use</param>
+    /// <param name="endian">The endian to use.</param>
     /// <param name="enc">The encoding for the <see cref="BinaryStream"/>, if needed.</param>
     /// <returns></returns>
-    public T LoadInto<T>(Endian endian, Encoding? enc = null) where T : IRead, new()
+    public T LoadTo<T>(Endian? endian = null, Encoding? enc = null) where T : ILoadable<T>
     {
-        return FromBytes<T>(Data, endian, enc);
+        using BinaryStream stream = new(Data);
+        return T.LoadFrom(stream, endian, enc);
     }
 }
 /// <summary>
 /// A RARC/CRAR file, the main way the format should be dealt with using this library.
 /// </summary>
-public class JKRArchive : IRead, IWrite {
+public class JKRArchive : IRead, IWrite, ILoadable<JKRArchive> {
     public JKRArchiveHeader Header;
     public JKRArchiveDataHeader DataHeader = new() {Sync = true};
     public List<JKRFolderNode> FolderNodes = [];
@@ -278,7 +278,7 @@ public class JKRArchive : IRead, IWrite {
         var endian = magic switch {
             "RARC" => Endian.Big,
             "CRAR" => Endian.Little,
-            _ => BinaryStream.Native
+            _ => stream.Endian
         };
         stream.Endian = endian;
         Header.Read(stream);
@@ -305,7 +305,8 @@ public class JKRArchive : IRead, IWrite {
                 dir.FolderNode = FolderNodes[(int)dir.mNode.Data];
                 if (dir.FolderNode.mNode.Hash == dir.mNode.Hash)
                     dir.FolderNode.FileNode = dir;
-            } else if (dir.IsFile) {
+            } 
+            else if (dir.IsFile) {
                 var pos = Header.FileDataOffset + Header.HeaderSize + dir.mNode.Data;
                 Array.Resize(ref dir.Data, (int)dir.mNode.DataSize);
                 var seek = new Seek<BinaryStream>(stream, pos);
@@ -576,5 +577,12 @@ public class JKRArchive : IRead, IWrite {
     /// <returns></returns>
     public IEnumerable<JKRFileNode> FindFile(string name) {
         return FileNodes.Where(x => x.Name == name || x.ToString() == name);
+    }
+
+    public static JKRArchive LoadFrom(BinaryStream stream, Endian? endian = null, Encoding? enc = null)
+    {
+        stream.Encoding = enc ?? stream.Encoding;
+        stream.Endian = endian ?? stream.Endian;
+        return new(stream);
     }
 }
