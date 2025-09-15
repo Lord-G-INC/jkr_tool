@@ -7,7 +7,7 @@ namespace jkr_lib;
 
 public static class Globals {
     public static T Align32<T>(T num) where T : struct, INumber<T>, IBitwiseOperators<T, T, T> {
-        T n = T.Parse("31", null);
+        T n = T.CreateChecked(31);
         return (num + n) & ~n;
     }
     public static u16 CalcHash(string str) {

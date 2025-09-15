@@ -80,8 +80,7 @@ public class JKRFolderNode : IRead, IWrite {
                 false => Path.Join(dir.FullName, Name, child.Name)
             };
             if (child.IsDir) {
-                Directory.CreateDirectory(fullpath);
-                child.FolderNode?.Unpack(new(fullpath));
+                child.FolderNode?.Unpack(Directory.CreateDirectory(fullpath));
             } else if (child.IsFile)
                 File.WriteAllBytes(fullpath, child.Data);
         }

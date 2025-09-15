@@ -13,7 +13,7 @@ public static class Util {
         var data = File.ReadAllBytes(file);
         data = Yaz0.Decompress(data);
         var arch = new JKRArchive(data);
-        arch.Unpack(new DirectoryInfo(file).Parent!);
+        arch.Unpack(new FileInfo(file).Directory!);
     }
     public static void AddFilesToArchive(string archive, string folderPath, Endian endian = Endian.Big) {
         var data = File.ReadAllBytes(archive);
