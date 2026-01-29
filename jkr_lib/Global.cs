@@ -6,9 +6,13 @@ using System.Numerics;
 namespace jkr_lib;
 
 public static class Globals {
-    public static T Align32<T>(T num) where T : struct, INumber<T>, IBitwiseOperators<T, T, T> {
-        T n = T.CreateChecked(31);
-        return (num + n) & ~n;
+    public static T Align32<T>(T num) where T : INumber<T> {
+        T n = T.CreateChecked(32);
+        T rem = num % n;
+        if (rem == T.Zero)
+            return num;
+        else
+            return num + (n - rem);
     }
     public static u16 CalcHash(string str) {
         u16 ret = 0;

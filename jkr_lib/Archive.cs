@@ -223,6 +223,14 @@ public class JKRFileNode : IRead, IWrite, ILoadTo {
         using BinaryStream stream = new(Data);
         return T.LoadFrom(stream, endian, enc);
     }
+
+    public void SetFileData(byte[] data)
+    {
+        if (!IsFile)
+            return;
+        Data = data;
+        mNode.DataSize = (u32)Data.Length;
+    }
 }
 /// <summary>
 /// A RARC/CRAR file, the main way the format should be dealt with using this library.
@@ -233,6 +241,7 @@ public class JKRArchive : IRead, IWrite, ILoadable<JKRArchive> {
     public List<JKRFolderNode> FolderNodes = [];
     public List<JKRFileNode> FileNodes = [];
     public JKRFolderNode Root = new();
+    public Endian Endian = BinaryStream.Native;
     /// <summary>
     /// Gets or Sets to sync up all nodes when Writing/Reading
     /// </summary>
@@ -274,12 +283,12 @@ public class JKRArchive : IRead, IWrite, ILoadable<JKRArchive> {
         var magic = stream.ReadString(4);
         if (magic != "RARC" && magic != "CRAR")
             return;
-        var endian = magic switch {
+        Endian = magic switch {
             "RARC" => Endian.Big,
             "CRAR" => Endian.Little,
             _ => stream.Endian
         };
-        stream.Endian = endian;
+        stream.Endian = Endian;
         Header.Read(stream);
         DataHeader.Read(stream);
         var table = StringTable.FromArchive(stream, this);
@@ -562,7 +571,8 @@ public class JKRArchive : IRead, IWrite, ILoadable<JKRArchive> {
     /// <summary>
     /// Writes all the data of this Archive to bytes, depending on the Endian.
     /// </summary>
-    public byte[] ToBytes(Endian endian, Encoding? enc = null) => Binary_Stream.Util.ToBytes(this, endian, enc);
+    public byte[] ToBytes(Endian? endian = null, Encoding? enc = null) => 
+        Binary_Stream.Util.ToBytes(this, endian ?? Endian, enc);
     /// <summary>
     /// Attempts to find a FolderNode either based on it's full path or name.
     /// </summary>
